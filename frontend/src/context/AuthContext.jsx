@@ -21,11 +21,25 @@ export function AuthProvider({ children }) {
     }
   }, [user]);
 
-  const login = (email, password, role = 'participant') => {
+  const login = (firstArg, secondArg, role = 'participant') => {
+    // Real backend auth call: login(access_token, userObject)
+    if (typeof firstArg === 'string' && typeof secondArg === 'object' && secondArg !== null) {
+      const token = firstArg;
+      const userObj = secondArg;
+      setUser(userObj);
+      setIsAuthenticated(true);
+      localStorage.setItem('dogfood_token', token);
+      localStorage.setItem('dogfood_auth_token', token);
+      return userObj;
+    }
+
+    // Legacy mock login call: login(email, password, role)
+    const email = firstArg;
     const targetUser = role === 'organizer' ? mockUsers.organizerUser : mockUsers.currentUser;
     const authenticatedUser = { ...targetUser, email, role };
     setUser(authenticatedUser);
     setIsAuthenticated(true);
+    localStorage.setItem('dogfood_token', 'mock_jwt_token_123456789');
     localStorage.setItem('dogfood_auth_token', 'mock_jwt_token_123456789');
     return authenticatedUser;
   };
@@ -41,6 +55,7 @@ export function AuthProvider({ children }) {
     };
     setUser(newUser);
     setIsAuthenticated(true);
+    localStorage.setItem('dogfood_token', 'mock_jwt_token_123456789');
     localStorage.setItem('dogfood_auth_token', 'mock_jwt_token_123456789');
     return newUser;
   };
@@ -48,6 +63,7 @@ export function AuthProvider({ children }) {
   const logout = () => {
     setUser(null);
     setIsAuthenticated(false);
+    localStorage.removeItem('dogfood_token');
     localStorage.removeItem('dogfood_auth_token');
     localStorage.removeItem('dogfood_user');
   };

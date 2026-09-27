@@ -4,17 +4,18 @@ import { mockHackathons } from '../data/mockHackathons';
 let hackathonsStore = [...mockHackathons];
 
 export const hackathonService = {
-  // GET /hackathons
+  // GET /events
   getHackathons: async (params = {}) => {
     try {
-      const response = await api.get('/hackathons', { params });
-      return response.data;
+      const response = await api.get('/events', { params });
+      const items = response.data.items || response.data;
+      return { data: items, total: response.data.total || items.length };
     } catch (error) {
-      console.warn('API /hackathons unavailable, using mock data:', error.message);
+      console.warn('API /events unavailable, using mock data:', error.message);
       let list = [...hackathonsStore];
       if (params.search) {
         const q = params.search.toLowerCase();
-        list = list.filter((h) => h.title.toLowerCase().includes(q) || h.description.toLowerCase().includes(q));
+        list = list.filter((h) => (h.title || h.name || '').toLowerCase().includes(q) || (h.description || '').toLowerCase().includes(q));
       }
       if (params.status && params.status !== 'All') {
         list = list.filter((h) => h.status === params.status);
@@ -29,26 +30,34 @@ export const hackathonService = {
     }
   },
 
-  // GET /hackathons/:id
+  // GET /events/:id
   getHackathonById: async (id) => {
     try {
-      const response = await api.get(`/hackathons/${id}`);
-      return response.data;
+      const response = await api.get(`/events/${id}`);
+      return { data: response.data };
     } catch (error) {
-      console.warn(`API /hackathons/${id} unavailable, using mock data`);
+      console.warn(`API /events/${id} unavailable, using mock data`);
       const item = hackathonsStore.find((h) => h.id === id);
       if (!item) throw new Error('Hackathon not found');
       return { data: item };
     }
   },
 
-  // POST /hackathons (Organizer)
+  // POST /events (Organizer)
   createHackathon: async (payload) => {
     try {
-      const response = await api.post('/hackathons', payload);
-      return response.data;
+      const body = {
+        name: payload.title || payload.name,
+        description: payload.description,
+        start_date: payload.startDate || payload.start_date || new Date().toISOString(),
+        end_date: payload.endDate || payload.end_date || new Date(Date.now() + 7 * 86400000).toISOString(),
+        status: payload.status || 'ACTIVE',
+        is_public: true,
+      };
+      const response = await api.post('/events', body);
+      return { data: response.data, success: true };
     } catch (error) {
-      console.warn('API POST /hackathons unavailable, updating mock store');
+      console.warn('API POST /events unavailable, updating mock store');
       const newHack = {
         id: `hack-${Date.now()}`,
         status: 'Active',

@@ -4,16 +4,23 @@ import { mockTeams } from '../data/mockTeams';
 let teamsStore = [...mockTeams];
 
 export const teamService = {
-  // GET /teams
+  // GET /events/:eventId/teams or /teams/:id
   getTeams: async (params = {}) => {
     try {
+      const eventId = params.eventId || params.hackathonId;
+      if (eventId) {
+        const response = await api.get(`/events/${eventId}/teams`, { params });
+        const items = response.data.items || response.data;
+        return { data: items, total: response.data.total || items.length };
+      }
       const response = await api.get('/teams', { params });
-      return response.data;
+      return { data: response.data.items || response.data };
     } catch (error) {
       console.warn('API /teams unavailable, using mock store');
       let list = [...teamsStore];
-      if (params.hackathonId) {
-        list = list.filter((t) => t.hackathonId === params.hackathonId);
+      if (params.hackathonId || params.eventId) {
+        const eid = params.hackathonId || params.eventId;
+        list = list.filter((t) => t.hackathonId === eid || t.eventId === eid);
       }
       return { data: list, total: list.length };
     }
@@ -23,7 +30,7 @@ export const teamService = {
   getTeamById: async (id) => {
     try {
       const response = await api.get(`/teams/${id}`);
-      return response.data;
+      return { data: response.data };
     } catch (error) {
       console.warn(`API /teams/${id} unavailable, using mock store`);
       const team = teamsStore.find((t) => t.id === id);
@@ -32,11 +39,19 @@ export const teamService = {
     }
   },
 
-  // POST /teams
+  // POST /events/:eventId/teams
   createTeam: async (payload) => {
     try {
+      const eventId = payload.eventId || payload.hackathonId;
+      if (eventId) {
+        const response = await api.post(`/events/${eventId}/teams`, {
+          name: payload.name || payload.teamName,
+          max_size: payload.maxMembers || 4,
+        });
+        return { data: response.data, success: true };
+      }
       const response = await api.post('/teams', payload);
-      return response.data;
+      return { data: response.data, success: true };
     } catch (error) {
       console.warn('API POST /teams unavailable, creating team in mock store');
       const newTeam = {
@@ -53,13 +68,18 @@ export const teamService = {
     }
   },
 
-  // POST /teams/:id/members (Join/Invite)
+  // POST /teams/join
   addTeamMember: async (teamId, memberData) => {
     try {
+      const inviteCode = memberData.inviteCode || memberData.invite_code;
+      if (inviteCode) {
+        const response = await api.post('/teams/join', { invite_code: inviteCode });
+        return { data: response.data, success: true };
+      }
       const response = await api.post(`/teams/${teamId}/members`, memberData);
-      return response.data;
+      return { data: response.data, success: true };
     } catch (error) {
-      console.warn(`API POST /teams/${teamId}/members unavailable, updating mock store`);
+      console.warn(`API POST join/member unavailable, updating mock store`);
       const idx = teamsStore.findIndex((t) => t.id === teamId);
       if (idx !== -1) {
         const newMember = {
@@ -76,13 +96,13 @@ export const teamService = {
     }
   },
 
-  // DELETE /teams/:teamId/members/:memberId
+  // POST /teams/:id/leave
   removeTeamMember: async (teamId, memberId) => {
     try {
-      const response = await api.delete(`/teams/${teamId}/members/${memberId}`);
-      return response.data;
+      const response = await api.post(`/teams/${teamId}/leave`);
+      return { data: response.data, success: true };
     } catch (error) {
-      console.warn(`API DELETE member unavailable, updating mock store`);
+      console.warn(`API leave team unavailable, updating mock store`);
       const idx = teamsStore.findIndex((t) => t.id === teamId);
       if (idx !== -1) {
         teamsStore[idx].members = teamsStore[idx].members.filter((m) => m.id !== memberId);

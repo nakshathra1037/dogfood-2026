@@ -4,24 +4,29 @@ import { mockUsers } from '../data/mockUsers';
 let userStore = { ...mockUsers.currentUser };
 
 export const userService = {
-  // GET /users/profile
+  // GET /auth/me
   getProfile: async () => {
     try {
-      const response = await api.get('/users/profile');
-      return response.data;
+      const response = await api.get('/auth/me');
+      return { data: response.data };
     } catch (error) {
-      console.warn('API /users/profile unavailable, returning mock profile');
+      console.warn('API /auth/me unavailable, returning mock profile');
       return { data: userStore };
     }
   },
 
-  // PUT /users/profile
+  // PATCH /users/:id
   updateProfile: async (payload) => {
     try {
-      const response = await api.put('/users/profile', payload);
-      return response.data;
+      const userId = payload.id || userStore.id;
+      if (userId) {
+        const response = await api.patch(`/users/${userId}`, payload);
+        return { data: response.data, success: true };
+      }
+      const response = await api.patch('/users/me', payload);
+      return { data: response.data, success: true };
     } catch (error) {
-      console.warn('API PUT /users/profile unavailable, updating mock user');
+      console.warn('API update user profile unavailable, updating mock user');
       userStore = { ...userStore, ...payload };
       return { data: userStore, success: true };
     }
