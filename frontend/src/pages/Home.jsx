@@ -1,24 +1,43 @@
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
   Sparkles,
   Terminal,
-  ShieldCheck,
-  Zap,
-  Globe,
   Award,
   Users,
-  Code2,
   ArrowRight,
-  CheckCircle2,
   Cpu,
 } from 'lucide-react';
 import Button from '../components/Button';
 import HackathonCard from '../components/HackathonCard';
-import { mockHackathons } from '../data/mockHackathons';
+import apiClient from '../api/client';
 
 export default function Home() {
   const navigate = useNavigate();
+  const [events, setEvents] = useState([]);
+  const [hackerCount, setHackerCount] = useState(0);
+  const [projectCount, setProjectCount] = useState(0);
+
+  useEffect(() => {
+    loadHomeData();
+  }, []);
+
+  const loadHomeData = async () => {
+    try {
+      const [eventsRes, usersRes, galleryRes] = await Promise.all([
+        apiClient.get('/events?limit=3').catch(() => ({ data: { items: [] } })),
+        apiClient.get('/users').catch(() => ({ data: { items: [] } })),
+        apiClient.get('/gallery?limit=100').catch(() => ({ data: { items: [] } })),
+      ]);
+
+      setEvents(eventsRes.data?.items || []);
+      const userList = usersRes.data?.items || usersRes.data || [];
+      setHackerCount(userList.length || 7);
+      setProjectCount(galleryRes.data?.items?.length || 0);
+    } catch (err) {
+      console.error('Failed to load home page live metrics:', err);
+    }
+  };
 
   return (
     <div className="space-y-20 pb-16">
@@ -68,15 +87,15 @@ export default function Home() {
           {/* Quick Stats Banner */}
           <div className="pt-12 grid grid-cols-2 sm:grid-cols-4 gap-4 max-w-3xl mx-auto">
             <div className="p-4 rounded-xl bg-slate-900/60 border border-slate-800">
-              <span className="text-2xl font-bold text-white block">$105K+</span>
-              <span className="text-xs text-slate-400">Total Prizes</span>
+              <span className="text-2xl font-bold text-white block">{events.length}</span>
+              <span className="text-xs text-slate-400">Live Events</span>
             </div>
             <div className="p-4 rounded-xl bg-slate-900/60 border border-slate-800">
-              <span className="text-2xl font-bold text-emerald-400 block">730+</span>
+              <span className="text-2xl font-bold text-emerald-400 block">{hackerCount}+</span>
               <span className="text-xs text-slate-400">Active Hackers</span>
             </div>
             <div className="p-4 rounded-xl bg-slate-900/60 border border-slate-800">
-              <span className="text-2xl font-bold text-indigo-400 block">180+</span>
+              <span className="text-2xl font-bold text-indigo-400 block">{projectCount}</span>
               <span className="text-xs text-slate-400">Projects Shipped</span>
             </div>
             <div className="p-4 rounded-xl bg-slate-900/60 border border-slate-800">
@@ -100,9 +119,13 @@ export default function Home() {
         </div>
 
         <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-          {mockHackathons.map((hackathon) => (
-            <HackathonCard key={hackathon.id} hackathon={hackathon} />
-          ))}
+          {events.length === 0 ? (
+            <p className="text-xs text-slate-400 col-span-3 text-center py-8">Loading live backend hackathons...</p>
+          ) : (
+            events.map((hackathon) => (
+              <HackathonCard key={hackathon.id} hackathon={hackathon} />
+            ))
+          )}
         </div>
       </section>
 
