@@ -1,21 +1,26 @@
 import React from 'react';
+import { BrowserRouter, Routes, Route } from 'react-router-dom';
+import MainLayout from './components/layout/MainLayout';
+import DashboardPage from './pages/DashboardPage';
+import SubmissionsPage from './pages/SubmissionsPage';
+import JudgingPage from './pages/JudgingPage';
+import CriteriaPage from './pages/CriteriaPage';
+import SettingsPage from './pages/SettingsPage';
+import NotFoundPage from './pages/NotFoundPage';
 
-function App() {
+export default function App() {
   return (
-    <div className="flex flex-col items-center justify-center min-h-screen p-6 text-center">
-      <h1 className="text-4xl font-bold tracking-tight text-white sm:text-6xl">
-        DOGFOOD 2026
-      </h1>
-      <p className="mt-4 text-lg text-slate-400">
-        Hackathon Submission and Judging Platform Baseline
-      </p>
-      <div className="mt-8 rounded-lg bg-slate-800 p-4 border border-slate-700">
-        <p className="text-sm font-mono text-emerald-400">
-          Frontend Foundation Initialized
-        </p>
-      </div>
-    </div>
+    <BrowserRouter>
+      <Routes>
+        <Route path="/" element={<MainLayout />}>
+          <Route index element={<DashboardPage />} />
+          <Route path="submissions" element={<SubmissionsPage />} />
+          <Route path="judging" element={<JudgingPage />} />
+          <Route path="criteria" element={<CriteriaPage />} />
+          <Route path="settings" element={<SettingsPage />} />
+          <Route path="*" element={<NotFoundPage />} />
+        </Route>
+      </Routes>
+    </BrowserRouter>
   );
 }
-
-export default App;
