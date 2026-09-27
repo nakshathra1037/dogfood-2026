@@ -1,54 +1,162 @@
-# Data Model Specification
+# Data Model Specification — DOGFOOD 2026
 
-## Overview
-This document defines the entity-relationship placeholders for the DOGFOOD 2026 database schema.
+## Entity Relationship Overview
 
-## Proposed Entities
+```
+ [User] <----+ (created_by)
+   |         |
+   |         +----------- [Event] <-----------+ (event_id)
+   |                       |  |  |              |
+   | (creator)             |  |  +--> [Track]   |
+   +--> [Team] <-----------+  |  |              |
+         |  |                 |  +--> [Prize]   |
+         |  +--> [Project] <--+                 |
+         |         ^  ^                         |
+         |         |  +---------+               |
+         v         |            |               |
+   [TeamMember]    |            |               |
+                   |            |               |
+ [JudgeAssignment] +            |               |
+   (judge_id + project_id)      |               |
+                                |               |
+ [Evaluation] ------------------+               |
+   (judge_id + project_id)                      |
+     |                                          |
+     +--> [EvaluationScore]                     |
+            ^                                   |
+            |                                   |
+ [RubricCriterion] <--- [Rubric] <--------------+
+```
 
-### 1. Users
-- `id`: UUID (Primary Key)
-- `username`: String (Unique)
-- `email`: String (Unique)
-- `role`: Enum (`organizer`, `judge`, `participant`)
-- `created_at`: Timestamp
-- `updated_at`: Timestamp
+---
 
-### 2. Hackathons / Events
-- `id`: UUID (Primary Key)
-- `title`: String
-- `description`: Text
-- `status`: Enum (`draft`, `active`, `judging`, `completed`)
-- `start_time`: Timestamp
-- `end_time`: Timestamp
-- `created_at`: Timestamp
+## Entities & Tables
 
-### 3. Submissions / Projects
-- `id`: UUID (Primary Key)
-- `hackathon_id`: UUID (Foreign Key -> Hackathons.id)
-- `title`: String
-- `tagline`: String
-- `description`: Text
-- `repo_url`: String
-- `demo_url`: String
-- `team_members`: JSONB / Array
-- `created_at`: Timestamp
+### 1. `users`
+- `id`: Integer (PK, Autoincrement)
+- `name`: String(255), Not Null
+- `email`: String(255), Unique, Not Null, Index (Lowercase normalized)
+- `password_hash`: String(255), Not Null
+- `role`: Enum (`PARTICIPANT`, `JUDGE`, `ORGANIZER`, `ADMIN`), Not Null, Index
+- `is_active`: Boolean, Default True, Not Null
+- `created_at`: DateTime (UTC), Not Null
+- `updated_at`: DateTime (UTC), Not Null
 
-### 4. Criteria
-- `id`: UUID (Primary Key)
-- `hackathon_id`: UUID (Foreign Key -> Hackathons.id)
-- `name`: String
-- `description`: Text
-- `weight`: Float
-- `max_score`: Integer
+### 2. `events`
+- `id`: Integer (PK, Autoincrement)
+- `name`: String(255), Not Null
+- `description`: Text, Nullable
+- `start_date`: DateTime (UTC), Not Null
+- `end_date`: DateTime (UTC), Not Null
+- `created_by`: Integer (FK -> `users.id`), Not Null, Index
+- `status`: Enum (`DRAFT`, `ACTIVE`, `ENDED`, `ARCHIVED`), Default `DRAFT`, Index
+- `is_public`: Boolean, Default True, Not Null
+- `created_at`: DateTime (UTC), Not Null
+- `updated_at`: DateTime (UTC), Not Null
+- **Constraint:** `CHECK (start_date < end_date)`
 
-### 5. Evaluations / Scores
-- `id`: UUID (Primary Key)
-- `submission_id`: UUID (Foreign Key -> Submissions.id)
-- `judge_id`: UUID (Foreign Key -> Users.id)
-- `criterion_id`: UUID (Foreign Key -> Criteria.id)
-- `score`: Float
-- `feedback`: Text
-- `created_at`: Timestamp
+### 3. `tracks`
+- `id`: Integer (PK, Autoincrement)
+- `event_id`: Integer (FK -> `events.id`, ON DELETE CASCADE), Not Null, Index
+- `name`: String(255), Not Null
+- `description`: Text, Nullable
+- `is_active`: Boolean, Default True, Not Null
+- `created_at`: DateTime (UTC), Not Null
+- `updated_at`: DateTime (UTC), Not Null
+- **Constraint:** `UNIQUE (event_id, name)`
 
-## Planned Schema Migrations
-Database schema versioning will be managed by Alembic migrations in `/backend/alembic/versions`.
+### 4. `prizes`
+- `id`: Integer (PK, Autoincrement)
+- `event_id`: Integer (FK -> `events.id`, ON DELETE CASCADE), Not Null, Index
+- `name`: String(255), Not Null
+- `description`: Text, Nullable
+- `position`: Integer, Default 1, Not Null
+- `amount`: String(100), Nullable
+- `created_at`: DateTime (UTC), Not Null
+- `updated_at`: DateTime (UTC), Not Null
+
+### 5. `teams`
+- `id`: Integer (PK, Autoincrement)
+- `event_id`: Integer (FK -> `events.id`, ON DELETE CASCADE), Not Null, Index
+- `name`: String(255), Not Null
+- `invite_code`: String(64), Unique, Not Null, Index
+- `created_by`: Integer (FK -> `users.id`), Not Null, Index
+- `max_size`: Integer, Default 5, Not Null
+- `created_at`: DateTime (UTC), Not Null
+- `updated_at`: DateTime (UTC), Not Null
+- **Constraint:** `UNIQUE (event_id, name)`
+
+### 6. `team_members`
+- `id`: Integer (PK, Autoincrement)
+- `team_id`: Integer (FK -> `teams.id`, ON DELETE CASCADE), Not Null, Index
+- `user_id`: Integer (FK -> `users.id`, ON DELETE CASCADE), Not Null, Index
+- `role`: Enum (`LEADER`, `MEMBER`), Default `MEMBER`, Not Null
+- `created_at`: DateTime (UTC), Not Null
+- **Constraint:** `UNIQUE (team_id, user_id)`
+
+### 7. `projects`
+- `id`: Integer (PK, Autoincrement)
+- `event_id`: Integer (FK -> `events.id`, ON DELETE CASCADE), Not Null, Index
+- `team_id`: Integer (FK -> `teams.id`, ON DELETE CASCADE), Unique, Not Null, Index
+- `track_id`: Integer (FK -> `tracks.id`, ON DELETE SET NULL), Nullable, Index
+- `name`: String(255), Not Null
+- `description`: Text, Nullable
+- `repository_url`: String(500), Nullable
+- `demo_url`: String(500), Nullable
+- `status`: Enum (`DRAFT`, `SUBMITTED`), Default `DRAFT`, Index
+- `submitted_at`: DateTime (UTC), Nullable
+- `created_at`: DateTime (UTC), Not Null
+- `updated_at`: DateTime (UTC), Not Null
+- **Constraint:** `UNIQUE (event_id, name)`
+
+### 8. `judge_assignments`
+- `id`: Integer (PK, Autoincrement)
+- `event_id`: Integer (FK -> `events.id`, ON DELETE CASCADE), Not Null, Index
+- `judge_id`: Integer (FK -> `users.id`, ON DELETE CASCADE), Not Null, Index
+- `project_id`: Integer (FK -> `projects.id`, ON DELETE CASCADE), Not Null, Index
+- `assigned_by`: Integer (FK -> `users.id`), Not Null
+- `created_at`: DateTime (UTC), Not Null
+- **Constraint:** `UNIQUE (judge_id, project_id)`
+
+### 9. `rubrics`
+- `id`: Integer (PK, Autoincrement)
+- `event_id`: Integer (FK -> `events.id`, ON DELETE CASCADE), Not Null, Index
+- `name`: String(255), Not Null
+- `status`: Enum (`DRAFT`, `ACTIVE`, `LOCKED`), Default `DRAFT`, Index
+- `version`: Integer, Default 1, Not Null
+- `created_at`: DateTime (UTC), Not Null
+- `updated_at`: DateTime (UTC), Not Null
+
+### 10. `rubric_criteria`
+- `id`: Integer (PK, Autoincrement)
+- `rubric_id`: Integer (FK -> `rubrics.id`, ON DELETE CASCADE), Not Null, Index
+- `name`: String(255), Not Null
+- `description`: Text, Nullable
+- `weight`: Float (Percentage 0-100), Not Null
+- `max_score`: Float, Default 10.0, Not Null
+- `ordering`: Integer, Default 0, Not Null
+- `created_at`: DateTime (UTC), Not Null
+- `updated_at`: DateTime (UTC), Not Null
+
+### 11. `evaluations`
+- `id`: Integer (PK, Autoincrement)
+- `event_id`: Integer (FK -> `events.id`, ON DELETE CASCADE), Not Null, Index
+- `judge_id`: Integer (FK -> `users.id`, ON DELETE CASCADE), Not Null, Index
+- `project_id`: Integer (FK -> `projects.id`, ON DELETE CASCADE), Not Null, Index
+- `rubric_id`: Integer (FK -> `rubrics.id`, ON DELETE RESTRICT), Not Null, Index
+- `status`: Enum (`DRAFT`, `SUBMITTED`), Default `DRAFT`, Index
+- `submitted_at`: DateTime (UTC), Nullable
+- `notes`: Text, Nullable
+- `created_at`: DateTime (UTC), Not Null
+- `updated_at`: DateTime (UTC), Not Null
+- **Constraint:** `UNIQUE (judge_id, project_id)`
+
+### 12. `evaluation_scores`
+- `id`: Integer (PK, Autoincrement)
+- `evaluation_id`: Integer (FK -> `evaluations.id`, ON DELETE CASCADE), Not Null, Index
+- `criterion_id`: Integer (FK -> `rubric_criteria.id`, ON DELETE RESTRICT), Not Null, Index
+- `score`: Float, Not Null
+- `comment`: Text, Nullable
+- `created_at`: DateTime (UTC), Not Null
+- `updated_at`: DateTime (UTC), Not Null
+- **Constraint:** `UNIQUE (evaluation_id, criterion_id)`

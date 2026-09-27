@@ -1,20 +1,37 @@
 import React from 'react';
+import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
+import { AuthProvider } from './context/AuthContext';
+import { Navbar } from './components/Navbar';
+import { GalleryPage } from './pages/GalleryPage';
+import { EventsPage } from './pages/EventsPage';
+import { EventDetailPage } from './pages/EventDetailPage';
+import { ParticipantDashboard } from './pages/ParticipantDashboard';
+import { JudgeDashboard } from './pages/JudgeDashboard';
+import { OrganizerDashboard } from './pages/OrganizerDashboard';
 
 function App() {
   return (
-    <div className="flex flex-col items-center justify-center min-h-screen p-6 text-center">
-      <h1 className="text-4xl font-bold tracking-tight text-white sm:text-6xl">
-        DOGFOOD 2026
-      </h1>
-      <p className="mt-4 text-lg text-slate-400">
-        Hackathon Submission and Judging Platform Baseline
-      </p>
-      <div className="mt-8 rounded-lg bg-slate-800 p-4 border border-slate-700">
-        <p className="text-sm font-mono text-emerald-400">
-          Frontend Foundation Initialized
-        </p>
-      </div>
-    </div>
+    <AuthProvider>
+      <BrowserRouter>
+        <div className="min-h-screen bg-slate-950 text-slate-100 flex flex-col font-sans">
+          <Navbar />
+          <main className="flex-1">
+            <Routes>
+              <Route path="/" element={<GalleryPage />} />
+              <Route path="/events" element={<EventsPage />} />
+              <Route path="/events/:id" element={<EventDetailPage />} />
+              <Route path="/participant" element={<ParticipantDashboard />} />
+              <Route path="/judge" element={<JudgeDashboard />} />
+              <Route path="/organizer" element={<OrganizerDashboard />} />
+              <Route path="*" element={<Navigate to="/" replace />} />
+            </Routes>
+          </main>
+          <footer className="border-t border-slate-900 py-6 text-center text-xs text-slate-600">
+            DOGFOOD 2026 &mdash; Open-Source Hackathon Submission and Judging Platform
+          </footer>
+        </div>
+      </BrowserRouter>
+    </AuthProvider>
   );
 }
 
