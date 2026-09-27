@@ -1,0 +1,35 @@
+export const mockTeams = [
+  {
+    id: 'team-1',
+    name: 'NeuralBytes',
+    hackathonId: 'hack-1',
+    hackathonTitle: 'DOGFOOD 2026 Global AI Challenge',
+    leader: 'Alex Chen',
+    leaderEmail: 'alex@example.com',
+    members: [
+      { id: 'u1', name: 'Alex Chen', role: 'Team Lead / Fullstack', email: 'alex@example.com', avatar: '👨‍💻' },
+      { id: 'u2', name: 'Priya Sharma', role: 'AI Engineer', email: 'priya@example.com', avatar: '👩‍💻' },
+      { id: 'u3', name: 'David Kim', role: 'Systems Developer', email: 'david@example.com', avatar: '👨‍🔬' },
+    ],
+    maxMembers: 4,
+    inviteCode: 'NB-2026-X9',
+    status: 'Complete',
+    createdAt: '2026-09-20',
+  },
+  {
+    id: 'team-2',
+    name: 'CyberDefenders',
+    hackathonId: 'hack-2',
+    hackathonTitle: 'CyberShield Quantum Hack 2026',
+    leader: 'Sarah Jenkins',
+    leaderEmail: 'sarah@example.com',
+    members: [
+      { id: 'u4', name: 'Sarah Jenkins', role: 'Security Architect', email: 'sarah@example.com', avatar: '👩‍💼' },
+      { id: 'u5', name: 'Marcus Ray', role: 'Cryptography Lead', email: 'marcus@example.com', avatar: '👨‍💻' },
+    ],
+    maxMembers: 5,
+    inviteCode: 'CD-SEC-88',
+    status: 'Recruiting',
+    createdAt: '2026-09-22',
+  },
+];
