@@ -68,6 +68,9 @@ venv.bak/
 # Docker & Database
 postgres_data/
 .docker/
+*.db
+*.sqlite
+*.sqlite3
 
 # IDEs & Editors
 .idea/
