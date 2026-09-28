@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import { Terminal, User, Mail, Lock, UserCheck } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
@@ -6,6 +6,7 @@ import { useToast } from '../context/ToastContext';
 import Button from '../components/Button';
 import Input from '../components/Input';
 import { Card, CardContent } from '../components/Card';
+import apiClient from '../api/client';
 
 export default function Register() {
   const [name, setName] = useState('');
@@ -14,11 +15,21 @@ export default function Register() {
   const [role, setRole] = useState('participant');
   const [loading, setLoading] = useState(false);
 
-  const { register } = useAuth();
+  const { user, isAuthenticated, login } = useAuth();
   const { success, error } = useToast();
   const navigate = useNavigate();
 
-  const handleSubmit = (e) => {
+  useEffect(() => {
+    if (isAuthenticated && user) {
+      const targetPath =
+        user.role === 'ORGANIZER' || user.role === 'ADMIN'
+          ? '/organizer'
+          : '/dashboard';
+      navigate(targetPath, { replace: true });
+    }
+  }, [isAuthenticated, user, navigate]);
+
+  const handleSubmit = async (e) => {
     e.preventDefault();
     if (!name || !email || !password) {
       error('Please fill in all fields.');
@@ -26,12 +37,38 @@ export default function Register() {
     }
 
     setLoading(true);
-    setTimeout(() => {
-      register({ name, email, password, role });
+    try {
+      await apiClient.post('/auth/register', {
+        name: name.trim(),
+        email: email.trim(),
+        password: password,
+        role: role.toUpperCase(),
+      });
+
+      const loginRes = await apiClient.post('/auth/login', {
+        email: email.trim(),
+        password: password,
+      });
+
+      const token = loginRes.data.access_token;
+      const userObj = loginRes.data.user;
+      login(token, userObj);
+      success(`Account created successfully! Welcome, ${userObj.name}!`);
+      const targetPath =
+        userObj.role === 'ORGANIZER' || userObj.role === 'ADMIN'
+          ? '/organizer'
+          : '/dashboard';
+      navigate(targetPath, { replace: true });
+    } catch (err) {
+      const msg =
+        err.response?.data?.error?.message ||
+        err.response?.data?.detail ||
+        err.userMessage ||
+        'Registration failed.';
+      error(msg);
+    } finally {
       setLoading(false);
-      success('Account created successfully!');
-      navigate(role === 'organizer' ? '/organizer' : '/dashboard');
-    }, 600);
+    }
   };
 
   return (
@@ -42,10 +79,10 @@ export default function Register() {
             <UserCheck className="w-6 h-6" />
           </div>
           <h2 className="text-2xl font-bold text-white tracking-tight">Create DOGFOOD Account</h2>
-          <p className="text-xs text-slate-400">Join the open-source local hackathon ecosystem</p>
+          <p className="text-xs text-slate-400">Join the hackathon platform to participate or host competitions</p>
         </div>
 
-        <Card className="border-indigo-500/20">
+        <Card className="border-indigo-500/20 shadow-2xl">
           <CardContent className="p-6">
             <form onSubmit={handleSubmit} className="space-y-4">
               <div className="space-y-1">
@@ -78,6 +115,7 @@ export default function Register() {
                 value={name}
                 onChange={(e) => setName(e.target.value)}
                 placeholder="Alex Chen"
+                required
               />
 
               <Input
@@ -87,6 +125,7 @@ export default function Register() {
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
                 placeholder="you@example.com"
+                required
               />
 
               <Input
@@ -96,6 +135,7 @@ export default function Register() {
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
                 placeholder="••••••••"
+                required
               />
 
               <Button variant="emerald" className="w-full" isLoading={loading}>

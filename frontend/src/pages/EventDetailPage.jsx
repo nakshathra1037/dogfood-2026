@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { useParams, Link } from 'react-router-dom';
+import { useParams, Link, useNavigate } from 'react-router-dom';
 import apiClient from '../api/client';
 import { useAuth } from '../context/AuthContext';
 import { Badge } from '../components/Badge';
@@ -15,11 +15,14 @@ import {
   CheckCircle2,
   Medal,
   Award,
+  Sparkles,
+  UserPlus,
 } from 'lucide-react';
 
 export function EventDetailPage() {
   const { id } = useParams();
-  const { isOrganizer } = useAuth();
+  const navigate = useNavigate();
+  const { isOrganizer, isAuthenticated } = useAuth();
   const [event, setEvent] = useState(null);
   const [rubric, setRubric] = useState(null);
   const [results, setResults] = useState(null);
@@ -151,26 +154,38 @@ export function EventDetailPage() {
             </button>
           </div>
 
-          {isOrganizer && (
-            <div className="flex items-center space-x-2">
+          <div className="flex items-center space-x-2">
+            {!isOrganizer && (
               <button
-                onClick={() => handleExportCSV(false)}
-                disabled={downloading}
-                className="flex items-center space-x-1.5 px-3 py-2 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-medium border border-slate-700 transition"
+                onClick={() => navigate(`/events/${id}/register`)}
+                className="flex items-center space-x-1.5 px-4 py-2 rounded-xl bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 text-white text-xs font-bold transition shadow-lg shadow-emerald-600/20"
               >
-                <Download className="w-3.5 h-3.5" />
-                <span>Export Leaderboard CSV</span>
+                <Sparkles className="w-3.5 h-3.5" />
+                <span>Register Hackathon</span>
               </button>
-              <button
-                onClick={() => handleExportCSV(true)}
-                disabled={downloading}
-                className="flex items-center space-x-1.5 px-3 py-2 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-medium border border-slate-700 transition"
-              >
-                <FileSpreadsheet className="w-3.5 h-3.5 text-emerald-400" />
-                <span>Detailed Scores CSV</span>
-              </button>
-            </div>
-          )}
+            )}
+
+            {isOrganizer && (
+              <>
+                <button
+                  onClick={() => handleExportCSV(false)}
+                  disabled={downloading}
+                  className="flex items-center space-x-1.5 px-3 py-2 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-medium border border-slate-700 transition"
+                >
+                  <Download className="w-3.5 h-3.5" />
+                  <span>Export Leaderboard CSV</span>
+                </button>
+                <button
+                  onClick={() => handleExportCSV(true)}
+                  disabled={downloading}
+                  className="flex items-center space-x-1.5 px-3 py-2 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-medium border border-slate-700 transition"
+                >
+                  <FileSpreadsheet className="w-3.5 h-3.5 text-emerald-400" />
+                  <span>Detailed Scores CSV</span>
+                </button>
+              </>
+            )}
+          </div>
         </div>
       </div>
 

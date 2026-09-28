@@ -23,14 +23,17 @@ import { Card, CardHeader, CardTitle, CardContent } from '../components/Card';
 import Loader from '../components/Loader';
 import ErrorState from '../components/ErrorState';
 
+import apiClient from '../api/client';
+
 export default function HackathonDetails() {
   const { id } = useParams();
   const navigate = useNavigate();
-  const { isAuthenticated } = useAuth();
-  const { success } = useToast();
+  const { isAuthenticated, user } = useAuth();
+  const { success, error: toastError } = useToast();
 
   const [hackathon, setHackathon] = useState(null);
   const [loading, setLoading] = useState(true);
+  const [registering, setRegistering] = useState(false);
   const [error, setError] = useState(null);
   const [registered, setRegistered] = useState(false);
 
@@ -40,7 +43,47 @@ export default function HackathonDetails() {
       setError(null);
       try {
         const res = await hackathonService.getHackathonById(id);
-        setHackathon(res.data);
+        const data = res.data;
+        // Normalize fields for UI display
+        const normalized = {
+          id: data.id,
+          title: data.name || data.title,
+          description: data.description,
+          status: data.status || 'ACTIVE',
+          startDate: data.start_date ? new Date(data.start_date).toLocaleDateString() : data.startDate || 'TBD',
+          endDate: data.end_date ? new Date(data.end_date).toLocaleDateString() : data.endDate || 'TBD',
+          mode: data.mode || 'Online',
+          category: data.category || 'Open Innovation',
+          organizer: data.organizer || 'DOGFOOD Platform',
+          tagline: data.tagline || (data.description ? data.description.slice(0, 120) + '...' : 'Global Developer Competition'),
+          prizePool: data.prizePool || (data.prizes?.length ? data.prizes[0].amount || '$10,000' : '$10,000'),
+          minTeamSize: data.minTeamSize || 1,
+          maxTeamSize: data.maxTeamSize || 5,
+          participantsCount: data.participantsCount || 1,
+          bannerImage: data.bannerImage || 'https://images.unsplash.com/photo-1526374965328-7f61d4dc18c5?auto=format&fit=crop&w=1200&q=80',
+          problemStatements: data.tracks?.length ? data.tracks.map(t => ({ id: t.id, title: t.name, description: t.description })) : data.problemStatements,
+          prizes: data.prizes?.length ? data.prizes.map((p, idx) => ({ place: p.name, reward: p.amount || 'Award', badge: idx === 0 ? '🏆' : idx === 1 ? '🥈' : '🥉' })) : data.prizes,
+          timeline: data.timeline || [
+            { step: 'Registration Opens', date: data.start_date ? new Date(data.start_date).toLocaleDateString() : 'Active', status: 'completed' },
+            { step: 'Hacking & Building', date: 'In Progress', status: 'current' },
+            { step: 'Submission Deadline', date: data.end_date ? new Date(data.end_date).toLocaleDateString() : 'Closing Soon', status: 'upcoming' },
+          ],
+          technologies: data.technologies || ['React', 'FastAPI', 'Python', 'Docker', 'AI/ML'],
+          ...data,
+        };
+        setHackathon(normalized);
+
+        // Check if user is currently registered for this event
+        if (isAuthenticated) {
+          try {
+            const regRes = await apiClient.get('/events/registered');
+            const myEvents = regRes.data?.items || [];
+            const isReg = myEvents.some((ev) => String(ev.id) === String(id));
+            setRegistered(isReg);
+          } catch {
+            // Unauthenticated or offline
+          }
+        }
       } catch (err) {
         setError(err.message || 'Hackathon details not found');
       } finally {
@@ -48,15 +91,14 @@ export default function HackathonDetails() {
       }
     };
     loadData();
-  }, [id]);
+  }, [id, isAuthenticated]);
 
   const handleRegister = () => {
     if (!isAuthenticated) {
-      navigate('/login');
+      navigate('/login', { state: { from: { pathname: `/hackathons/${id}/register` } } });
       return;
     }
-    setRegistered(true);
-    success(`Successfully registered for ${hackathon.title}!`);
+    navigate(`/hackathons/${id}/register`);
   };
 
   if (loading) return <Loader fullPage message="Loading hackathon details..." />;
@@ -94,11 +136,16 @@ export default function HackathonDetails() {
 
             <div className="flex items-center gap-3 shrink-0">
               {registered ? (
-                <Button variant="emerald" icon={CheckCircle2} disabled>
-                  Registered
-                </Button>
+                <div className="flex items-center gap-2">
+                  <Button variant="emerald" icon={CheckCircle2} disabled>
+                    Registered
+                  </Button>
+                  <Button variant="secondary" onClick={() => navigate('/dashboard/hackathons')}>
+                    My Hackathons &rarr;
+                  </Button>
+                </div>
               ) : (
-                <Button variant="emerald" size="lg" onClick={handleRegister}>
+                <Button variant="emerald" size="lg" isLoading={registering} onClick={handleRegister}>
                   Register for Event
                 </Button>
               )}

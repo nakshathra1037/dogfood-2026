@@ -1,73 +1,73 @@
-import api from './api';
-import { mockHackathons } from '../data/mockHackathons';
-
-let hackathonsStore = [...mockHackathons];
+import { eventsApi } from '../api/events';
+import { registrationsApi } from '../api/registrations';
+import { teamsApi } from '../api/teams';
 
 export const hackathonService = {
-  // GET /events
+  // GET /events (Paginated)
   getHackathons: async (params = {}) => {
-    try {
-      const response = await api.get('/events', { params });
-      const items = response.data.items || response.data;
-      return { data: items, total: response.data.total || items.length };
-    } catch (error) {
-      console.warn('API /events unavailable, using mock data:', error.message);
-      let list = [...hackathonsStore];
-      if (params.search) {
-        const q = params.search.toLowerCase();
-        list = list.filter((h) => (h.title || h.name || '').toLowerCase().includes(q) || (h.description || '').toLowerCase().includes(q));
-      }
-      if (params.status && params.status !== 'All') {
-        list = list.filter((h) => h.status === params.status);
-      }
-      if (params.category && params.category !== 'All') {
-        list = list.filter((h) => h.category === params.category);
-      }
-      if (params.mode && params.mode !== 'All') {
-        list = list.filter((h) => h.mode === params.mode);
-      }
-      return { data: list, total: list.length };
+    const apiParams = {
+      page: params.page || 1,
+      limit: params.limit || 50,
+    };
+    if (params.status && params.status !== 'All') {
+      apiParams.status = params.status.toUpperCase();
     }
+    const response = await eventsApi.getEvents(apiParams);
+    let items = response.items || response || [];
+    
+    // Client-side search & category filtering if needed
+    if (params.search) {
+      const q = params.search.toLowerCase();
+      items = items.filter(
+        (h) =>
+          (h.name || h.title || '').toLowerCase().includes(q) ||
+          (h.description || '').toLowerCase().includes(q)
+      );
+    }
+    
+    return { data: items, total: response.total ?? items.length };
   },
 
   // GET /events/:id
   getHackathonById: async (id) => {
-    try {
-      const response = await api.get(`/events/${id}`);
-      return { data: response.data };
-    } catch (error) {
-      console.warn(`API /events/${id} unavailable, using mock data`);
-      const item = hackathonsStore.find((h) => h.id === id);
-      if (!item) throw new Error('Hackathon not found');
-      return { data: item };
-    }
+    const data = await eventsApi.getEventById(id);
+    return { data };
   },
 
-  // POST /events (Organizer)
+  // GET /events/registered
+  getMyRegisteredHackathons: async (params = {}) => {
+    const response = await eventsApi.getRegisteredEvents(params);
+    const items = response.items || response || [];
+    return { data: items, total: response.total ?? items.length };
+  },
+
+  // POST /events/:id/register
+  registerForHackathon: async (id, registrationData = {}) => {
+    return await registrationsApi.registerForHackathon(id, registrationData);
+  },
+
+  // POST /events (Organizer / Admin)
   createHackathon: async (payload) => {
-    try {
-      const body = {
-        name: payload.title || payload.name,
-        description: payload.description,
-        start_date: payload.startDate || payload.start_date || new Date().toISOString(),
-        end_date: payload.endDate || payload.end_date || new Date(Date.now() + 7 * 86400000).toISOString(),
-        status: payload.status || 'ACTIVE',
-        is_public: true,
-      };
-      const response = await api.post('/events', body);
-      return { data: response.data, success: true };
-    } catch (error) {
-      console.warn('API POST /events unavailable, updating mock store');
-      const newHack = {
-        id: `hack-${Date.now()}`,
-        status: 'Active',
-        participantsCount: 0,
-        teamsCount: 0,
-        bannerImage: 'https://images.unsplash.com/photo-1526374965328-7f61d4dc18c5?auto=format&fit=crop&w=1200&q=80',
-        ...payload,
-      };
-      hackathonsStore = [newHack, ...hackathonsStore];
-      return { data: newHack, success: true };
-    }
+    // Format dates to ISO UTC strings
+    const startDate = payload.startDate
+      ? new Date(payload.startDate).toISOString()
+      : new Date().toISOString();
+    const endDate = payload.endDate
+      ? new Date(payload.endDate).toISOString()
+      : new Date(Date.now() + 7 * 86400000).toISOString();
+
+    const body = {
+      name: (payload.title || payload.name || '').trim(),
+      description: payload.description || '',
+      start_date: startDate,
+      end_date: endDate,
+      status: payload.status ? payload.status.toUpperCase() : 'ACTIVE',
+      is_public: true,
+    };
+
+    const createdEvent = await eventsApi.createEvent(body);
+    return { data: createdEvent, success: true };
   },
 };
+
+export default hackathonService;

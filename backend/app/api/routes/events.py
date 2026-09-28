@@ -33,13 +33,40 @@ async def list_events(
     page: int = Query(1, ge=1),
     limit: int = Query(20, ge=1, le=100),
     status: Optional[EventStatus] = None,
+    registered_only: bool = Query(False),
     db: AsyncSession = Depends(get_db),
     current_user: Optional[User] = Depends(get_optional_current_user),
 ):
     params = PaginationParams(page=page, limit=limit)
-    events, total = await EventService.list_events(db, params, current_user, status_filter=status)
+    if registered_only:
+        if not current_user:
+            return PaginatedResponse.create([], 0, params)
+        events, total = await EventService.list_registered_events(db, current_user, params)
+    else:
+        events, total = await EventService.list_events(db, params, current_user, status_filter=status)
     items = [EventRead.model_validate(e) for e in events]
     return PaginatedResponse.create(items, total, params)
+
+
+@router.get("/registered", response_model=PaginatedResponse[EventRead], status_code=status.HTTP_200_OK, summary="List hackathons the logged-in user is registered for")
+async def list_my_registered_events(
+    page: int = Query(1, ge=1),
+    limit: int = Query(20, ge=1, le=100),
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    params = PaginationParams(page=page, limit=limit)
+    events, total = await EventService.list_registered_events(db, current_user, params)
+    items = [EventRead.model_validate(e) for e in events]
+    return PaginatedResponse.create(items, total, params)
+
+
+@router.get("/admin/stats", status_code=status.HTTP_200_OK, summary="Get high-level platform statistics for organizers/admins")
+async def get_admin_stats(
+    db: AsyncSession = Depends(get_db),
+    organizer: User = Depends(require_organizer_or_admin),
+):
+    return await EventService.get_admin_stats(db, organizer)
 
 
 @router.get("/{event_id}", response_model=EventDetail, status_code=status.HTTP_200_OK, summary="Get event details including tracks and prizes")
@@ -49,6 +76,27 @@ async def get_event(
 ):
     event = await EventService.get_event(db, event_id)
     return EventDetail.model_validate(event)
+
+
+@router.get("/{event_id}/registrations", status_code=status.HTTP_200_OK, summary="List all registered participants for an event")
+async def get_event_registrations(
+    event_id: int,
+    db: AsyncSession = Depends(get_db),
+    organizer: User = Depends(require_organizer_or_admin),
+):
+    return await EventService.list_event_registrations(db, event_id, organizer)
+
+
+@router.post("/{event_id}/register", response_model=EventDetail, status_code=status.HTTP_200_OK, summary="Register current user for a hackathon event")
+async def register_for_event(
+    event_id: int,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    event, _ = await EventService.register_for_event(db, event_id, current_user)
+    return EventDetail.model_validate(event)
+
+
 
 
 @router.patch("/{event_id}", response_model=EventRead, status_code=status.HTTP_200_OK, summary="Update event details")

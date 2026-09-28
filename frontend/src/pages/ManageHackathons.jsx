@@ -1,56 +1,98 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { FolderGit2, PlusCircle, Edit, Trash2 } from 'lucide-react';
+import { FolderGit2, PlusCircle, RefreshCw, Eye } from 'lucide-react';
 import { hackathonService } from '../services/hackathonService';
 import DataTable from '../components/DataTable';
 import Button from '../components/Button';
 import Badge from '../components/Badge';
+import { LoadingSpinner } from '../components/LoadingSpinner';
 import { useToast } from '../context/ToastContext';
 
 export default function ManageHackathons() {
   const [hackathons, setHackathons] = useState([]);
+  const [loading, setLoading] = useState(true);
   const navigate = useNavigate();
-  const { success } = useToast();
+  const { success, error } = useToast();
+
+  const fetchHackathons = async () => {
+    setLoading(true);
+    try {
+      const res = await hackathonService.getHackathons();
+      setHackathons(res.data || []);
+    } catch (err) {
+      error(err.userMessage || 'Failed to load hackathons');
+    } finally {
+      setLoading(false);
+    }
+  };
 
   useEffect(() => {
-    hackathonService.getHackathons().then((res) => setHackathons(res.data || []));
+    fetchHackathons();
   }, []);
+
+  const formatDate = (dateStr) => {
+    if (!dateStr) return 'TBD';
+    return new Date(dateStr).toLocaleDateString('en-US', {
+      month: 'short',
+      day: 'numeric',
+      year: 'numeric',
+    });
+  };
 
   const columns = [
     {
-      header: 'Hackathon Title',
-      key: 'title',
+      header: 'Hackathon Name',
+      key: 'name',
       sortable: true,
       render: (row) => (
         <div>
-          <span className="font-semibold text-slate-100 block">{row.title}</span>
-          <span className="text-[11px] text-slate-400">{row.organizer}</span>
+          <span className="font-semibold text-slate-100 block">{row.name || row.title}</span>
+          <span className="text-[11px] text-slate-400 line-clamp-1">{row.description || 'No description'}</span>
         </div>
       ),
-    },
-    {
-      header: 'Category',
-      key: 'category',
-      render: (row) => <Badge variant="indigo">{row.category}</Badge>,
     },
     {
       header: 'Status',
       key: 'status',
       sortable: true,
-      render: (row) => <Badge variant={row.status === 'Active' ? 'success' : 'neutral'}>{row.status}</Badge>,
+      render: (row) => {
+        const s = (row.status || 'ACTIVE').toUpperCase();
+        return (
+          <Badge variant={s === 'ACTIVE' ? 'success' : s === 'DRAFT' ? 'warning' : 'neutral'}>
+            {s}
+          </Badge>
+        );
+      },
     },
     {
-      header: 'Prize Pool',
-      key: 'prizePool',
-      render: (row) => <span className="font-mono text-emerald-400 font-semibold">{row.prizePool}</span>,
-    },
-    {
-      header: 'Participants',
-      key: 'participantsCount',
+      header: 'Start Date',
+      key: 'start_date',
       sortable: true,
-      render: (row) => <span className="font-mono text-slate-300">{row.participantsCount} Hackers</span>,
+      render: (row) => (
+        <span className="font-mono text-xs text-slate-300">
+          {formatDate(row.start_date || row.startDate)}
+        </span>
+      ),
+    },
+    {
+      header: 'End Date',
+      key: 'end_date',
+      sortable: true,
+      render: (row) => (
+        <span className="font-mono text-xs text-slate-300">
+          {formatDate(row.end_date || row.endDate)}
+        </span>
+      ),
     },
   ];
+
+  if (loading) {
+    return (
+      <div className="py-20 flex justify-center">
+        <LoadingSpinner message="Loading organizer hackathons..." />
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-6">
@@ -60,23 +102,34 @@ export default function ManageHackathons() {
             <FolderGit2 className="w-6 h-6 text-purple-400" />
             Manage Hackathon Competitions
           </h1>
-          <p className="text-slate-400 text-xs mt-1">Admin control table for published and upcoming hackathons.</p>
+          <p className="text-slate-400 text-xs mt-1">Control table for published and draft hackathons.</p>
         </div>
 
-        <Button variant="emerald" icon={PlusCircle} onClick={() => navigate('/organizer/create-hackathon')}>
-          Create Hackathon
-        </Button>
+        <div className="flex items-center gap-2">
+          <Button variant="outline" size="sm" icon={RefreshCw} onClick={fetchHackathons}>
+            Refresh
+          </Button>
+          <Button variant="emerald" icon={PlusCircle} onClick={() => navigate('/organizer/create-hackathon')}>
+            Create Hackathon
+          </Button>
+        </div>
       </div>
 
       <DataTable
         columns={columns}
         data={hackathons}
-        searchPlaceholder="Search hackathons by title..."
-        searchField="title"
+        searchPlaceholder="Search hackathons..."
+        searchField="name"
         actions={(row) => (
           <div className="flex items-center justify-end gap-2">
-            <Button variant="ghost" size="sm" icon={Edit} onClick={() => success(`Edit mode for ${row.title}`)} />
-            <Button variant="ghost" size="sm" icon={Trash2} className="text-rose-400" onClick={() => success(`Deleted ${row.title}`)} />
+            <Button
+              variant="ghost"
+              size="sm"
+              icon={Eye}
+              onClick={() => navigate(`/hackathons/${row.id}`)}
+            >
+              View
+            </Button>
           </div>
         )}
       />

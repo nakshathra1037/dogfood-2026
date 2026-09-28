@@ -1,3 +1,5 @@
+import secrets
+from datetime import datetime, timezone
 from typing import List, Optional, Tuple
 from sqlalchemy import select, func, and_, or_
 from sqlalchemy.orm import selectinload
@@ -5,6 +7,8 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.models.event import Event, EventStatus
 from app.models.track import Track
 from app.models.prize import Prize
+from app.models.team import Team
+from app.models.team_member import TeamMember, TeamRole
 from app.models.project import Project, ProjectStatus
 from app.models.user import User, UserRole
 from app.schemas.event import EventCreate, EventUpdate
@@ -239,3 +243,160 @@ class EventService:
 
         await db.delete(prize)
         await db.commit()
+
+    @staticmethod
+    async def list_registered_events(
+        db: AsyncSession,
+        user: User,
+        params: PaginationParams,
+    ) -> Tuple[List[Event], int]:
+        count_query = (
+            select(func.count(func.distinct(Event.id)))
+            .join(Team, Team.event_id == Event.id)
+            .join(TeamMember, TeamMember.team_id == Team.id)
+            .where(TeamMember.user_id == user.id)
+        )
+        total_res = await db.execute(count_query)
+        total = total_res.scalar() or 0
+
+        query = (
+            select(Event)
+            .join(Team, Team.event_id == Event.id)
+            .join(TeamMember, TeamMember.team_id == Team.id)
+            .where(TeamMember.user_id == user.id)
+            .distinct()
+            .options(selectinload(Event.tracks), selectinload(Event.prizes))
+            .order_by(Event.start_date.desc(), Event.id.desc())
+            .offset(params.offset)
+            .limit(params.limit)
+        )
+        res = await db.execute(query)
+        events = list(res.scalars().all())
+        return events, total
+
+    @staticmethod
+    async def is_user_registered(
+        db: AsyncSession,
+        event_id: int,
+        user_id: int,
+    ) -> bool:
+        query = (
+            select(TeamMember.id)
+            .join(Team, Team.id == TeamMember.team_id)
+            .where(Team.event_id == event_id, TeamMember.user_id == user_id)
+        )
+        res = await db.execute(query)
+        return res.scalar_one_or_none() is not None
+
+    @staticmethod
+    async def register_for_event(
+        db: AsyncSession,
+        event_id: int,
+        user: User,
+    ) -> Tuple[Event, Team]:
+        event = await EventService.get_event(db, event_id)
+        if event.status not in (EventStatus.ACTIVE, EventStatus.DRAFT):
+            raise BadRequestException(
+                "Cannot register: event is not accepting new registrations.",
+                code="EVENT_INACTIVE"
+            )
+
+        # Check if user is already a member of any team in this event
+        existing_membership_query = (
+            select(TeamMember)
+            .join(Team, Team.id == TeamMember.team_id)
+            .where(Team.event_id == event_id, TeamMember.user_id == user.id)
+        )
+        existing_membership = (await db.execute(existing_membership_query)).scalar_one_or_none()
+        if existing_membership:
+            team_res = await db.execute(
+                select(Team).where(Team.id == existing_membership.team_id)
+            )
+            team = team_res.scalar_one()
+            return event, team
+
+        # Create solo team / registration for participant
+        base_name = f"{user.name}'s Team" if user.name else f"Hacker Team {user.id}"
+        team_name = base_name
+        counter = 1
+        while True:
+            name_check = await db.execute(
+                select(Team).where(Team.event_id == event_id, Team.name == team_name)
+            )
+            if not name_check.scalar_one_or_none():
+                break
+            counter += 1
+            team_name = f"{base_name} ({counter})"
+
+        invite_code = secrets.token_urlsafe(8)
+        team = Team(
+            event_id=event_id,
+            name=team_name,
+            invite_code=invite_code,
+            created_by=user.id,
+            max_size=5,
+        )
+        db.add(team)
+        await db.flush()
+
+        member = TeamMember(
+            team_id=team.id,
+            user_id=user.id,
+            role=TeamRole.LEADER,
+        )
+        db.add(member)
+        await db.commit()
+        await db.refresh(event)
+
+        return event, team
+
+    @staticmethod
+    async def list_event_registrations(db: AsyncSession, event_id: int, user: User) -> List[dict]:
+        event = await EventService.get_event(db, event_id)
+        if user.role != UserRole.ADMIN and event.created_by != user.id:
+            raise ForbiddenException("You do not have permission to view registrations for this event.", code="EVENT_FORBIDDEN")
+
+        query = (
+            select(TeamMember, Team, User)
+            .join(Team, Team.id == TeamMember.team_id)
+            .join(User, User.id == TeamMember.user_id)
+            .where(Team.event_id == event_id)
+            .order_by(TeamMember.created_at.desc())
+        )
+        res = await db.execute(query)
+        rows = res.all()
+        results = []
+        for member, team, usr in rows:
+            results.append({
+                "id": member.id,
+                "user_id": usr.id,
+                "name": usr.name or f"Participant {usr.id}",
+                "email": usr.email,
+                "role": member.role.value if hasattr(member.role, "value") else str(member.role),
+                "team_id": team.id,
+                "team_name": team.name,
+                "created_at": member.created_at.isoformat() if member.created_at else None,
+                "status": "Registered",
+            })
+        return results
+
+    @staticmethod
+    async def get_admin_stats(db: AsyncSession, user: User) -> dict:
+        total_hackathons = (await db.execute(select(func.count(Event.id)))).scalar() or 0
+        published_hackathons = (await db.execute(select(func.count(Event.id)).where(Event.status == EventStatus.ACTIVE))).scalar() or 0
+        total_teams = (await db.execute(select(func.count(Team.id)))).scalar() or 0
+        total_registrations = (await db.execute(select(func.count(TeamMember.id)))).scalar() or 0
+        total_participants = (await db.execute(select(func.count(func.distinct(TeamMember.user_id))))).scalar() or 0
+        
+        now = datetime.now(timezone.utc)
+        upcoming_hackathons = (await db.execute(select(func.count(Event.id)).where(Event.start_date > now))).scalar() or 0
+
+        return {
+            "total_hackathons": total_hackathons,
+            "published_hackathons": published_hackathons,
+            "total_teams": total_teams,
+            "total_registrations": total_registrations,
+            "total_participants": total_participants,
+            "upcoming_hackathons": upcoming_hackathons,
+        }
+
